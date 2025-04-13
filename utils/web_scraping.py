@@ -9,7 +9,7 @@ def detect_alerts(data):
     alerts = []
     for entry in data:
         # Primeiro conjunto de condições (1° Tempo)
-        if (entry.get("score") == "0-0" and
+        if (entry.get("score") in "0-0" and
             5 <= entry.get("time", 0) <= 30 and  
             entry.get("drop", 0) >= 0.70 and
             entry.get("penalty") == "0-0" and
@@ -18,13 +18,22 @@ def detect_alerts(data):
             print(f"Alerta detectado (Conjunto 1 - Alerta de gols no 1° Tempo): {entry}")
 
         # Segundo conjunto de condições (Jogo todo)
-        elif (entry.get("score") == "0-0" and
+        elif (entry.get("score") in "0-0" and
               31 <= entry.get("time", 0) <= 75 and  
               entry.get("drop", 0) >= 0.70 and
               entry.get("penalty") == "0-0" and
               entry.get("red_card") == "0-0"):
             alerts.append(entry)
             print(f"Alerta detectado (Conjunto 2 - Alerta de gols no jogo todo): {entry}")
+
+        # Terceiro conjunto de condições (Nova condição)
+        elif (entry.get("score") in ["0-0", "0-1", "1-0", "1-1"] and
+              10 <= entry.get("time", 0) <= 80 and  
+              entry.get("drop", 0) >= 1 and
+              entry.get("penalty") == "0-0" and
+              entry.get("red_card") == "0-0"):
+            alerts.append(entry)
+            print(f"Alerta detectado (Conjunto 3 - Nova condição): {entry}")
 
     return alerts
 
@@ -77,6 +86,8 @@ def extract_table_data(page_source, game_id, match_url):
                 alert_type = "Alerta de gols no 1° Tempo"
             elif 31 <= alert.get("time", 0) <= 75:
                 alert_type = "Alerta de gols no jogo todo"
+            elif 10 <= alert.get("time", 0) <= 50:
+                alert_type = "Nova condição"
             else:
                 alert_type = "Alerta desconhecido"
 

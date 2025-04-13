@@ -73,11 +73,11 @@ def monitor_games():
                         driver.execute_script(f"window.open('{match_url}', '_blank');")
                         driver.switch_to.window(driver.window_handles[1])
 
-                        # Aguarda 3 segundos para garantir que a página carregue
-                        time.sleep(3)
+                        # Aguarda 2 segundos para garantir que a página carregue
+                        time.sleep(2)
 
                         # Espera até que a aba especificada esteja presente
-                        WebDriverWait(driver, 10).until(
+                        WebDriverWait(driver, 5).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, 'div.smenu a'))
                         )
 
@@ -92,14 +92,14 @@ def monitor_games():
                         driver.switch_to.window(driver.window_handles[0])
 
                         # Aguarda 3 segundos antes de continuar
-                        time.sleep(3)
+                        time.sleep(2)
 
                 # Atualiza a página principal de partidas
                 driver.refresh()
                 logging.info('Página principal atualizada')
 
-                # Aguarda 60 segundos antes de verificar novamente
-                time.sleep(60)
+                # Aguarda 30 segundos antes de verificar novamente
+                time.sleep(30)
             except Exception as e:
                 logging.error(f"Erro encontrado no loop principal: {e}")
                 logging.info("Tentando reconectar...")
