@@ -3,6 +3,7 @@ import logging
 import signal
 import sys
 import os  # Adicione esta importação para manipular caminhos
+import tempfile  # Adicione esta importação
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -25,9 +26,9 @@ chrome_options.add_argument("--window-size=1920,1080")  # Define um tamanho de j
 chrome_options.add_argument("--log-level=3")  # Reduz os logs do navegador
 chrome_options.add_argument("--silent")  # Minimiza a saída de logs
 
-# Adicione um diretório de dados de usuário exclusivo
-user_data_dir = os.path.join(os.getcwd(), "chrome_user_data")
-chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+# Cria um diretório temporário exclusivo para o user-data-dir
+temp_dir = tempfile.TemporaryDirectory()
+chrome_options.add_argument(f"--user-data-dir={temp_dir.name}")
 
 # Inicializar o WebDriver com as opções configuradas
 driver = webdriver.Chrome(options=chrome_options)
