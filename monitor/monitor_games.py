@@ -2,6 +2,7 @@ import time
 import logging
 import signal
 import sys
+import os  # Adicione esta importação para manipular caminhos
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -23,6 +24,10 @@ chrome_options.add_argument("--disable-dev-shm-usage")  # Evita problemas de mem
 chrome_options.add_argument("--window-size=1920,1080")  # Define um tamanho de janela padrão
 chrome_options.add_argument("--log-level=3")  # Reduz os logs do navegador
 chrome_options.add_argument("--silent")  # Minimiza a saída de logs
+
+# Adicione um diretório de dados de usuário exclusivo
+user_data_dir = os.path.join(os.getcwd(), "chrome_user_data")
+chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
 
 # Inicializar o WebDriver com as opções configuradas
 driver = webdriver.Chrome(options=chrome_options)
