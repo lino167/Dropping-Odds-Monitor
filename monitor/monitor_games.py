@@ -26,10 +26,6 @@ chrome_options.add_argument("--window-size=1920,1080")  # Define um tamanho de j
 chrome_options.add_argument("--log-level=3")  # Reduz os logs do navegador
 chrome_options.add_argument("--silent")  # Minimiza a saída de logs
 
-# Cria um diretório temporário exclusivo para o user-data-dir
-temp_dir = tempfile.TemporaryDirectory()
-chrome_options.add_argument(f"--user-data-dir={temp_dir.name}")
-
 # Inicializar o WebDriver com as opções configuradas
 driver = webdriver.Chrome(options=chrome_options)
 
