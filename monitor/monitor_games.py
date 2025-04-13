@@ -26,16 +26,26 @@ chrome_options.add_argument("--window-size=1920,1080")  # Define um tamanho de j
 chrome_options.add_argument("--log-level=3")  # Reduz os logs do navegador
 chrome_options.add_argument("--silent")  # Minimiza a saída de logs
 
+# Cria um diretório temporário exclusivo para o user-data-dir
+temp_dir = tempfile.TemporaryDirectory()
+chrome_options.add_argument(f"--user-data-dir={temp_dir.name}")
+
 # Inicializar o WebDriver com as opções configuradas
 driver = webdriver.Chrome(options=chrome_options)
 
 # Initialize sent_games_df as an empty DataFrame
 sent_games_df = DataFrame(columns=["game_id", "match_url", "data"])
 
+# Função para limpar recursos
+def cleanup():
+    driver.quit()  # Fecha o navegador
+    temp_dir.cleanup()  # Remove o diretório temporário
+
+# Manipulador de sinal para encerrar o programa corretamente
 def signal_handler(sig, frame):
     print('Saving sent games and exiting...')
     sent_games_df.to_excel(SENT_GAMES_FILE, index=False)
-    driver.quit()
+    cleanup()  # Chama a função de limpeza
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -117,9 +127,9 @@ def monitor_games():
         except Exception as e:
             logging.error(f"Erro ao salvar a planilha: {e}")
 
-        # Fecha o navegador
-        driver.quit()
-        logging.info('Navegador fechado')
+        # Fecha o navegador e limpa os recursos
+        cleanup()
+        logging.info('Recursos limpos e navegador fechado')
 
 if __name__ == "__main__":
     try:
@@ -128,5 +138,5 @@ if __name__ == "__main__":
         logging.info("Execução interrompida pelo usuário.")
         sent_games_df.to_excel(SENT_GAMES_FILE, index=False)
         logging.info('Jogos enviados salvos antes de sair.')
-        driver.quit()
-        logging.info('Navegador fechado.')
+        cleanup()
+        logging.info('Recursos limpos e navegador fechado.')
