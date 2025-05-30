@@ -6,10 +6,10 @@ import logging
 load_dotenv()
 
 # Configurações do Telegram
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     logging.error("As variáveis TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID não estão configuradas no .env.")
     exit()
 
