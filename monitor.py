@@ -7,14 +7,13 @@ import time
 import logging
 from config import SELENIUM_OPTIONS, MONITORING_INTERVAL, MAX_RETRIES, RETRY_DELAY
 from data_extractor import extract_table_data, unify_tables
-from alert_manager import AlertManager
+from alert_manager import check_alerts
 from excel_utils import criar_planilha_excel, registrar_alerta_excel
 from telegram_utils import send_telegram_message
 
 class GameMonitor:
     def __init__(self):
         self.driver = self._setup_driver()
-        self.alert_manager = AlertManager()
 
     def _setup_driver(self):
         """Configura e retorna uma instância do WebDriver."""
@@ -107,27 +106,9 @@ class GameMonitor:
 
         if not unified_data.empty:
             logging.info(f"Tabela unificada para game_id {game_id}:\n{unified_data.head()}")
-            alerts = self.alert_manager.check_alerts(unified_data, game_id, match_url_total, df_total)
-            
+            alerts = check_alerts(unified_data, game_id, match_url_total, df_total)
             for alert in alerts:
-                if registrar_alerta_excel(game_id, [
-                    game_id,
-                    unified_data['league'].iloc[0],
-                    f"{unified_data['home_team'].iloc[0]} - {unified_data['away_team'].iloc[0]}",
-                    self.alert_manager.sent_alerts[game_id]['favorite'],
-                    self.alert_manager.sent_alerts[game_id]['favorite_initial'],
-                    self.alert_manager.sent_alerts[game_id]['favorite_current'],
-                    self.alert_manager.sent_alerts[game_id]['drop_percentage'],
-                    unified_data['handicap'].iloc[0],
-                    unified_data['over'].iloc[0],
-                    unified_data['handicap'].iloc[-1],
-                    unified_data['over'].iloc[-1],
-                    unified_data['drop'].iloc[-1],
-                    unified_data['score'].iloc[-1],
-                    unified_data['time'].iloc[-1],
-                    match_url_total
-                ]):
-                    send_telegram_message(alert)
+                send_telegram_message(alert)
 
 def main():
     criar_planilha_excel()  # Cria a planilha Excel antes de iniciar

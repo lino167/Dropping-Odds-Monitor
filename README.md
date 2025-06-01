@@ -45,8 +45,8 @@ Uma solução automatizada para monitorar odds em sites de apostas esportivas, i
 4. **Configure o arquivo `.env`:**
    Crie um arquivo `.env` na raiz do projeto com:
    ```
-   TELEGRAM_TOKEN=seu_token_aqui
-   TELEGRAM_CHANNEL_ID=seu_canal_id_aqui
+   TELEGRAM_BOT_TOKEN=seu_token_aqui
+   TELEGRAM_CHAT_ID=seu_canal_id_aqui
    ```
 
 ---
