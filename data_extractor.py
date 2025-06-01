@@ -61,17 +61,42 @@ def unify_tables(data_total, data_1x2):
         logging.warning("Tabela '1x2' está vazia.")
     else:
         logging.info(f"Tabela '1x2' contém {len(data_1x2)} linhas.")
+
     df_total = pd.DataFrame(data_total)
     df_1x2 = pd.DataFrame(data_1x2)
     logging.info(f"DataFrame 'total':\n{df_total.head()}")
     logging.info(f"DataFrame '1x2':\n{df_1x2.head()}")
+
     for col in ['league', 'home_team', 'away_team']:
         if col not in df_total.columns:
             df_total[col] = 'N/A'
         if col not in df_1x2.columns:
             df_1x2[col] = 'N/A'
+
     unified_df = pd.merge(df_total, df_1x2, on='time', how='outer', suffixes=('_total', '_1x2'))
-    logging.info(f"Tabela unificada:\n{unified_df.head()}")
+    logging.info(f"Tabela unificada (antes do filtro):\n{unified_df.head()}")
+
+    # Remove linhas onde todas as colunas de odds estão vazias ou 0.0
+    odds_cols = ['over', 'under', 'home', 'draw', 'away']
+    def odds_invalid(row):
+        for col in odds_cols:
+            val = row.get(col, None)
+            if val not in [None, '', 0.0, 0, '0.0', '0']:
+                return False
+        return True
+
+    unified_df = unified_df[~unified_df.apply(odds_invalid, axis=1)].reset_index(drop=True)
+
+    for col in ['league', 'home_team', 'away_team']:
+        if col not in unified_df.columns:
+            # Tenta pegar de uma das tabelas, se existir
+            if f"{col}_total" in unified_df.columns:
+                unified_df[col] = unified_df[f"{col}_total"]
+            elif f"{col}_1x2" in unified_df.columns:
+                unified_df[col] = unified_df[f"{col}_1x2"]
+            else:
+                unified_df[col] = 'N/A'
+
     reordered_columns = [
         'league', 'home_team', 'away_team', 'time', 'score', 'over', 'handicap', 'under', 'drop', 'sharp',
         'penalty', 'red_card', 'home', 'draw', 'away'
