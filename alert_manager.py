@@ -1,172 +1,131 @@
 import logging
-import os
-from openpyxl import load_workbook
-from excel_utils import registrar_alerta_excel
+from supabase_utils import alerta_ja_existente
 
-# Variáveis globais para rastrear alertas
-sent_alerts = set()
-
-
-def check_alerts(unified_data, game_id, match_url, df_total):
+def check_and_create_alert(unified_data, game_id, match_url):
     """
-    Verifica condições para alertas e retorna mensagens formatadas.
-    Só envia se o game_id não estiver na memória e nem registrado na planilha.
+    Verifica as condições do jogo com base nas regras do usuário. Se forem atendidas e o 
+    alerta não existir no Supabase, retorna um dicionário com todos os dados do alerta. 
+    Caso contrário, retorna None.
     """
-    global sent_alerts
-    alerts = []
-
     if unified_data.empty:
-        logging.info(
-            f"Nenhum dado unificado disponível para verificar alertas no jogo {game_id}."
-        )
-        return alerts
+        logging.info(f"Dados unificados vazios para o jogo {game_id}.")
+        return None
 
-    # Verifica se o alerta já foi enviado (na memória ou na planilha)
-    nome_arquivo = "alertas.xlsx"
-    if os.path.exists(nome_arquivo):
-        workbook = load_workbook(nome_arquivo)
-        sheet = workbook.active
-        game_ids_registrados = [
-            str(row[0].value) for row in sheet.iter_rows(min_row=2, max_col=1)
-        ]
-        if str(game_id) in game_ids_registrados:
-            logging.info(
-                f"Alerta para game_id {game_id} já registrado na planilha. Ignorando."
-            )
-            return alerts
+    if alerta_ja_existente(game_id):
+        return None
 
-    # Pega informações da tabela unificada
-    league = (
-        unified_data["league"].iloc[0] if "league" in unified_data.columns else "N/A"
-    )
-    home_team = (
-        unified_data["home_team"].iloc[0]
-        if "home_team" in unified_data.columns
-        else "N/A"
-    )
-    away_team = (
-        unified_data["away_team"].iloc[0]
-        if "away_team" in unified_data.columns
-        else "N/A"
-    )
+    # --- Início da Lógica de Negócio do Usuário ---
 
-    # Identifica o favorito (primeira linha válida)
-    favorite = None
-    favorite_initial = None
-    favorite_nome = None
+    # 1. Pega informações gerais da partida
+    league = unified_data["league"].iloc[0] if "league" in unified_data.columns else "N/A"
+    home_team = unified_data["home_team"].iloc[0] if "home_team" in unified_data.columns else "N/A"
+    away_team = unified_data["away_team"].iloc[0] if "away_team" in unified_data.columns else "N/A"
+
+    # 2. Identifica o favorito e sua odd inicial
+    favorite_team_code = None
+    favorite_initial_odd = 0.0
+    favorite_name = "N/A"
+    
     for _, row in unified_data.iterrows():
-        home_odd = float(row.get("home", 0))
-        away_odd = float(row.get("away", 0))
-        if home_odd > 1.01 and away_odd > 1.01:
-            if home_odd < away_odd:
-                favorite = "home"
-                favorite_initial = home_odd
-                favorite_nome = home_team
-            else:
-                favorite = "away"
-                favorite_initial = away_odd
-                favorite_nome = away_team
-            break 
-
-    if not favorite or not favorite_initial or favorite_initial <= 1.01:
-        logging.info(f"Favorito não encontrado ou inválido para o jogo {game_id}.")
-        return alerts  # Não achou favorito válido
-
-    # Pega o handicap e odd inicial da primeira linha da tabela unificada
-    handicap_inicial = unified_data.iloc[0].get("handicap", "N/A")
-    over_inicial = unified_data.iloc[0].get("over", "N/A")
-
-    for _, row in unified_data.iterrows():
-        # 1. Checa o drop da linha de gols primeiro
-        drop_gols = row.get("drop", 0)
         try:
-            drop_gols_float = float(drop_gols)
-        except Exception:
-            continue
-        if drop_gols_float < 0.60:
+            home_odd = float(row.get("home", 0))
+            away_odd = float(row.get("away", 0))
+            if home_odd > 1.01 and away_odd > 1.01:
+                if home_odd < away_odd:
+                    favorite_team_code = "home"
+                    favorite_initial_odd = home_odd
+                    favorite_name = home_team
+                else:
+                    favorite_team_code = "away"
+                    favorite_initial_odd = away_odd
+                    favorite_name = away_team
+                break
+        except (ValueError, TypeError):
             continue
 
-        # 2. Verifica cartões vermelhos e pênaltis
-        red_card = row.get("red_card", "")
-        penalty = row.get("penalty", "")
-        if red_card != "0-0" or penalty != "0-0":
-            continue
+    if not favorite_team_code:
+        logging.info(f"Favorito não pôde ser determinado para o jogo {game_id}.")
+        return None
 
-        # 3. Placar
-        score = row.get("score", "")
+    # 3. Pega dados iniciais da linha de gols
+    initial_row = unified_data.iloc[0]
+    handicap_inicial = initial_row.get("handicap", "N/A")
+    over_inicial = initial_row.get("over", "N/A")
+
+    # 4. Itera em cada registro de tempo para encontrar uma oportunidade de alerta
+    for _, current_row in unified_data.iterrows():
+        
+        # ... (As condições 1 a 4 permanecem as mesmas) ...
         try:
+            drop_gols_float = float(current_row.get("drop", 0))
+            if drop_gols_float < 0.60: continue
+        except (ValueError, TypeError): continue
+
+        if current_row.get("red_card", "0-0") != "0-0" or current_row.get("penalty", "0-0") != "0-0": continue
+
+        try:
+            score = current_row.get("score", "")
             gols_home, gols_away = map(int, str(score).split("-"))
-        except Exception:
-            continue
+            if (favorite_team_code == "home" and gols_home > gols_away) or \
+               (favorite_team_code == "away" and gols_away > gols_home): continue
+        except (ValueError, TypeError): continue
 
-        # 4. Só alerta se favorito não está vencendo (empatando ou perdendo)
-        if (favorite == "home" and gols_home > gols_away) or (
-            favorite == "away" and gols_away > gols_home
-        ):
-            continue
-
-        # 5. Odds atuais válidas
-        odd_atual = float(row.get(favorite, 0))
-        if odd_atual <= 1.01:
-            continue
-
-        # 6. Minuto do jogo deve ser antes do 80
-        time_min = row.get("time", 0)
         try:
-            time_min_int = int(time_min)
-        except Exception:
-            continue
-        if time_min_int >= 80:
-            continue
+            current_odd = float(current_row.get(favorite_team_code, 0))
+            if current_odd <= 1.01: continue
+        except (ValueError, TypeError): continue
+            
+        # CONDIÇÃO 5: Tempo de jogo
+        try:
+            time_min_int = int(current_row.get("time", 99))
+            if time_min_int >= 80: continue
+        except (ValueError, TypeError): continue
 
-        # 7. Cálculo da variação
-        if odd_atual < favorite_initial:
-            variacao = round(
-                ((favorite_initial - odd_atual) / favorite_initial) * 100, 2
-            )
-            tipo = "Queda odd favorito"
-            emoji = "📉"
-        elif odd_atual > favorite_initial:
-            variacao = round(((odd_atual - favorite_initial) / odd_atual) * 100, 2)
-            tipo = "Subida odd favorito"
-            emoji = "📈"
+        # Se todas as condições passaram, calcula a variação e monta o alerta
+        if current_odd < favorite_initial_odd:
+            variacao = round(((favorite_initial_odd - current_odd) / favorite_initial_odd) * 100, 2)
+        elif current_odd > favorite_initial_odd:
+            variacao = round(((current_odd - favorite_initial_odd) / current_odd) * 100, 2)
         else:
-            continue  # Sem variação
+            continue
+        
+        # Monta o dicionário de alerta com o tipo de dado correto para cada coluna
+        alerta_data = {
+            "game_id": game_id,
+            "liga": league,
+            "times": f"{home_team} vs {away_team}",
+            "favorito": favorite_name,
+            "odd_inicial_favorito": favorite_initial_odd,
+            "odd_atual_favorito": current_odd,
+            "queda_odd_favorito": variacao,
+            "linha_gols_inicial": handicap_inicial,
+            "odd_linha_gols_inicial": over_inicial,
+            "linha_gols_atual": current_row.get("handicap", "N/A"),
+            "odd_linha_gols_atual": current_row.get("over", "N/A"),
+            "drop_total": drop_gols_float,
+            "placar": score,
+            "tempo_jogo": time_min_int,  # <<< CORREÇÃO APLICADA AQUI
+            "url": match_url,
+        }
 
-        # 8. Drop do total (para mostrar no alerta se for relevante)
-        info_drop_total = f"{(drop_gols_float)*100}%"
+        # Formata a mensagem HTML para o Telegram (aqui sim usamos o texto formatado)
+        info_drop_total = f"{drop_gols_float * 100:.0f}%"
+        tipo_variacao = 'queda' if current_odd < favorite_initial_odd else 'subida'
+        tempo_formatado = f"{time_min_int}'"
 
-        # Monta alerta
-        alerta = [
-            game_id,
-            league,
-            f"{home_team} - {away_team}",
-            favorite_nome, 
-            favorite_initial,
-            odd_atual,
-            variacao,
-            handicap_inicial,
-            over_inicial,
-            row.get("handicap", "N/A"),
-            row.get("over", "N/A"),
-            row.get("drop", "N/A"),
-            score,
-            time_min,
-            match_url,
-        ]
-        if registrar_alerta_excel(game_id, alerta):
-            sent_alerts.add(game_id)
-            message = (
-                f"🤖 Alerta automático para o jogo <b>{home_team} x {away_team} ({league})</b>:\n\n"
-                f"📉 Detectado um drop significativa na odd da linha de gols: {info_drop_total}\n"
-                f"📊 Linha de gols inicial: {handicap_inicial} → (Odd: {over_inicial})\n"
-                f"⚡ Linha de gols atual: {row.get('handicap', 'N/A')} → (Odd: {row.get('over', 'N/A')})\n"
-                f"⭐ O favorito é o <b>{favorite_nome}</b> com {'queda' if 'Queda' in tipo else 'subida'} "
-                f"na odd de: {abs(variacao)}% ({favorite_initial} → {odd_atual}).\n"
-                f"🔢 Placar atual: {score}\n"
-                f"⏱️ Minuto: {time_min}\n\n"
-                f"Para mais detalhes, acesse: <a href='{match_url}'>Aqui</a>\n\n"
-                f"⚠️ Lembre-se: este é um alerta automatizado, não é recomendação de aposta."
-            )
-            alerts.append(message)
-    return alerts
+        alerta_data["mensagem_html"] = (
+            f"🤖 <b>Alerta Automático: {home_team} x {away_team} ({league})</b>\n\n"
+            f"📉 Drop significativo na linha de gols: <b>{info_drop_total}</b>\n"
+            f"📊 Linha inicial: {handicap_inicial} (Odd: {over_inicial})\n"
+            f"⚡ Linha atual: {current_row.get('handicap', 'N/A')} (Odd: {current_row.get('over', 'N/A')})\n\n"
+            f"⭐ O favorito <b>{favorite_name}</b> está com <b>{tipo_variacao}</b> na odd de: "
+            f"<b>{abs(variacao):.2f}%</b> ({favorite_initial_odd} → {current_odd}).\n\n"
+            f"🔢 Placar: <b>{score}</b>\n"
+            f"⏱️ Minuto: <b>{tempo_formatado}</b>\n\n"
+            f'<a href="{match_url}">Ver detalhes da partida</a>\n\n'
+            f"<i>⚠️ Lembre-se: analise o jogo antes de investir.</i>"
+        )
+        
+        return alerta_data
+
+    return None

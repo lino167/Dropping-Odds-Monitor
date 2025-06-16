@@ -6,10 +6,14 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import logging
 from config import SELENIUM_OPTIONS, MONITORING_INTERVAL, MAX_RETRIES, RETRY_DELAY
+from config import (
+    SELENIUM_OPTIONS, MONITORING_INTERVAL, MAX_RETRIES, 
+    RETRY_DELAY, GAME_PROCESSING_DELAY
+)
 from data_extractor import extract_table_data, unify_tables
-from alert_manager import check_alerts
-from excel_utils import criar_planilha_excel, registrar_alerta_excel
+from alert_manager import check_and_create_alert
 from telegram_utils import send_telegram_message
+from supabase_utils import salvar_alerta_supabase
 
 class GameMonitor:
     def __init__(self):
@@ -30,8 +34,15 @@ class GameMonitor:
         if 'window_size' in SELENIUM_OPTIONS:
             chrome_options.add_argument(f"--window-size={SELENIUM_OPTIONS['window_size']}")
 
-        return webdriver.Chrome(options=chrome_options)
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            logging.info("WebDriver iniciado com sucesso.")
+            return driver
+        except Exception as e:
+            logging.error(f"Falha ao iniciar o WebDriver: {e}")
+            exit()
 
+        
     def monitor_games(self):
         """Monitora continuamente os jogos e verifica alertas."""
         url = 'https://dropping-odds.com/'
@@ -85,33 +96,47 @@ class GameMonitor:
                 time.sleep(2)  # Aguarda 2 segundos entre partidas
 
     def _process_single_game(self, game_id):
-        """Processa uma única partida."""
-        match_url_total = f'https://dropping-odds.com/event.php?id={game_id}&t=total'
-        match_url_1x2 = f'https://dropping-odds.com/event.php?id={game_id}&t=1x2'
+        """Processa uma única partida, verifica e envia alerta se necessário."""
+        try:
+            logging.info(f"Processando partida: {game_id}")
+            match_url_total = f'https://dropping-odds.com/event.php?id={game_id}&t=total'
+            match_url_1x2 = f'https://dropping-odds.com/event.php?id={game_id}&t=1x2'
 
-        # Processa a aba "total"
-        self.driver.get(match_url_total)
-        WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'div.smenu a')))
-        data_total = extract_table_data(self.driver.page_source, game_id, match_url_total, table_type="total")
+            # 1. Extrai dados
+            self.driver.get(match_url_total)
+            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'table')))
+            data_total = extract_table_data(self.driver.page_source, game_id, match_url_total, table_type="total")
 
-        # Processa a aba "1x2"
-        self.driver.get(match_url_1x2)
-        WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'div.smenu a')))
-        data_1x2 = extract_table_data(self.driver.page_source, game_id, match_url_1x2, table_type="1x2")
+            self.driver.get(match_url_1x2)
+            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'table')))
+            data_1x2 = extract_table_data(self.driver.page_source, game_id, match_url_1x2, table_type="1x2")
 
-        # Unifica os dados e verifica alertas
-        unified_data, df_total = unify_tables(data_total, data_1x2)
+            if not data_total or not data_1x2:
+                logging.warning(f"Não foi possível extrair dados de uma das abas para o jogo {game_id}.")
+                return
 
-        if not unified_data.empty:
-            logging.info(f"Tabela unificada para game_id {game_id}:\n{unified_data.head()}")
-            alerts = check_alerts(unified_data, game_id, match_url_total, df_total)
-            for alert in alerts:
-                send_telegram_message(alert)
+            # 2. Unifica dados
+            unified_data, _ = unify_tables(data_total, data_1x2)
+
+            if unified_data is None or unified_data.empty:
+                logging.warning(f"Dados unificados resultaram vazios ou nulos para o jogo {game_id}. Pulando.")
+                return
+
+            # 3. Verifica se um alerta deve ser gerado
+            alerta_para_enviar = check_and_create_alert(unified_data, game_id, match_url_total)
+
+            if alerta_para_enviar:
+                logging.info(f"Condições de alerta atendidas para {game_id}. Tentando salvar...")
+                if salvar_alerta_supabase(alerta_para_enviar):
+                    logging.info(f"Alerta salvo. Enviando para o Telegram: {game_id}")
+                    send_telegram_message(alerta_para_enviar['mensagem_html'])
+                else:
+                    logging.error(f"Falha ao salvar alerta no Supabase para {game_id}. Envio cancelado.")
+        
+        except Exception as e:
+            logging.error(f"Erro inesperado ao processar o jogo {game_id}: {e}", exc_info=True)
 
 def main():
-    criar_planilha_excel()  # Cria a planilha Excel antes de iniciar
     monitor = GameMonitor()
     monitor.monitor_games()
 

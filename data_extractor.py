@@ -53,53 +53,51 @@ def extract_table_data(page_source, game_id, match_url, table_type="total"):
     return data
 
 def unify_tables(data_total, data_1x2):
-    if not data_total:
-        logging.warning("Tabela 'total' está vazia.")
-    else:
-        logging.info(f"Tabela 'total' contém {len(data_total)} linhas.")
-    if not data_1x2:
-        logging.warning("Tabela '1x2' está vazia.")
-    else:
-        logging.info(f"Tabela '1x2' contém {len(data_1x2)} linhas.")
+    """
+    Unifica os dados de 'total' e '1x2' em um único DataFrame.
+    Agora com tratamento de erros para sempre retornar uma tupla.
+    """
+    try:
+        if not data_total or not data_1x2:
+            logging.warning("Dados de uma das tabelas estão faltando, não é possível unificar.")
+            return pd.DataFrame(), pd.DataFrame()
 
-    df_total = pd.DataFrame(data_total)
-    df_1x2 = pd.DataFrame(data_1x2)
-    logging.info(f"DataFrame 'total':\n{df_total.head()}")
-    logging.info(f"DataFrame '1x2':\n{df_1x2.head()}")
+        df_total = pd.DataFrame(data_total)
+        df_1x2 = pd.DataFrame(data_1x2)
 
-    for col in ['league', 'home_team', 'away_team']:
-        if col not in df_total.columns:
-            df_total[col] = 'N/A'
-        if col not in df_1x2.columns:
-            df_1x2[col] = 'N/A'
+        # Remove colunas duplicadas antes do merge para evitar conflitos
+        cols_to_drop_total = [col for col in ['league', 'home_team', 'away_team'] if col in df_total.columns]
+        df_total = df_total.drop(columns=cols_to_drop_total)
 
-    unified_df = pd.merge(df_total, df_1x2, on='time', how='outer', suffixes=('_total', '_1x2'))
-    logging.info(f"Tabela unificada (antes do filtro):\n{unified_df.head()}")
+        cols_to_drop_1x2 = [col for col in ['league', 'home_team', 'away_team', 'score'] if col in df_1x2.columns]
+        df_1x2 = df_1x2.drop(columns=cols_to_drop_1x2)
+        
+        # Garante que a coluna 'time' exista para o merge
+        if 'time' not in df_total.columns or 'time' not in df_1x2.columns:
+            logging.error("A coluna 'time' é essencial para o merge e não foi encontrada em ambas as tabelas.")
+            return pd.DataFrame(), pd.DataFrame()
 
-    # Remove linhas onde todas as colunas de odds estão vazias ou 0.0
-    odds_cols = ['over', 'under', 'home', 'draw', 'away']
-    def odds_invalid(row):
-        for col in odds_cols:
-            val = row.get(col, None)
-            if val not in [None, '', 0.0, 0, '0.0', '0']:
-                return False
-        return True
+        unified_df = pd.merge(df_total, df_1x2, on='time', how='outer')
 
-    unified_df = unified_df[~unified_df.apply(odds_invalid, axis=1)].reset_index(drop=True)
+        unified_df['league'] = data_total[0]['league']
+        unified_df['home_team'] = data_total[0]['home_team']
+        unified_df['away_team'] = data_total[0]['away_team']
 
-    for col in ['league', 'home_team', 'away_team']:
-        if col not in unified_df.columns:
-            # Tenta pegar de uma das tabelas, se existir
-            if f"{col}_total" in unified_df.columns:
-                unified_df[col] = unified_df[f"{col}_total"]
-            elif f"{col}_1x2" in unified_df.columns:
-                unified_df[col] = unified_df[f"{col}_1x2"]
-            else:
-                unified_df[col] = 'N/A'
+        # Limpeza e ordenação
+        odds_cols = ['over', 'under', 'home', 'draw', 'away']
+        def odds_invalid(row):
+            for col in odds_cols:
+                val = row.get(col, None)
+                # Verifica se o valor pode ser convertido para número e é uma odd válida
+                if val is not None and pd.to_numeric(val, errors='coerce') > 1.01:
+                    return False
+            return True
 
-    reordered_columns = [
-        'league', 'home_team', 'away_team', 'time', 'score', 'over', 'handicap', 'under', 'drop', 'sharp',
-        'penalty', 'red_card', 'home', 'draw', 'away'
-    ]
-    unified_df = unified_df[[col for col in reordered_columns if col in unified_df.columns]]
-    return unified_df, df_total
+        unified_df = unified_df[~unified_df.apply(odds_invalid, axis=1)].reset_index(drop=True)
+        unified_df = unified_df.sort_values(by='time', ascending=False).reset_index(drop=True)
+
+        return unified_df, df_total
+
+    except Exception as e:
+        logging.error(f"Erro crítico ao unificar tabelas: {e}", exc_info=True)
+        return pd.DataFrame(), pd.DataFrame()
