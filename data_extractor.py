@@ -9,7 +9,7 @@ def extract_table_data(page_source, game_id, match_url, table_type="total"):
     league = matchinfo.find('h3').text.strip() if matchinfo and matchinfo.find('h3') else 'N/A'
     teams = matchinfo.find('h1').text.strip() if matchinfo and matchinfo.find('h1') else 'N/A'
     if "-" in teams:
-        home_team, away_team = [team.strip() for team in teams.split("-")]
+        home_team, away_team = [team.strip() for team in teams.split(" - ", 1)]    
     else:
         home_team, away_team = teams, "N/A"
     data = []
