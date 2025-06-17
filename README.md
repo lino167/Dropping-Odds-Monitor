@@ -1,113 +1,142 @@
 # 🚦 Dropping Odds Monitor
 
-Bem-vindo ao **Dropping Odds Monitor**!  
-Uma solução automatizada para monitorar odds em sites de apostas esportivas, identificar quedas e variações relevantes e enviar alertas em tempo real para o Telegram.
+Um bot em Python que monitora a queda de odds em sites de apostas esportivas, analisa os dados dos jogos em tempo real e envia alertas para um canal do Telegram. Utiliza o Supabase para registrar os alertas enviados e evitar duplicatas.
 
 ---
 
-## ✨ Funcionalidades
+## ✨ Funcionalidades Principais
 
-- 🔎 **Web Scraping de Odds**: Coleta automática de odds em sites de apostas.
-- 📉 **Detecção de Quedas e Subidas**: Identifica quedas e subidas significativas nas cotações do favorito.
-- 🏆 **Análise Inteligente**: Considera apenas cenários relevantes (sem cartões vermelhos, sem pênaltis, favorito empatando ou perdendo, drop relevante na linha de gols).
-- 📲 **Alertas no Telegram**: Notificações automáticas e formatadas como prognóstico, enviadas para seu canal.
-- 📊 **Exportação para Excel**: Salva os dados monitorados e os alertas em arquivos `.xlsx`.
-- ⚙️ **Configuração via `.env`**: Ajuste rápido de parâmetros sensíveis.
+- 🔎 **Scraping em Tempo Real**: Coleta dados de odds continuamente usando Selenium.
+- 🧠 **Lógica de Alerta Customizável**: Analisa dados com base em regras personalizadas (queda de odds, placar, tempo de jogo, etc.).
+- 📲 **Notificações no Telegram**: Envia alertas instantâneos e bem formatados para um chat ou canal do Telegram.
+- ☁️ **Registro na Nuvem com Supabase**: Salva cada alerta enviado em um banco de dados, garantindo que nenhum alerta para o mesmo jogo seja enviado mais de uma vez.
+- ⚙️ **Configuração Segura**: Utiliza um arquivo `.env` para gerenciar chaves de API e outras informações sensíveis de forma segura.
+- 💪 **Robusto e Autônomo**: Projetado para rodar continuamente, com tratamento de erros para lidar com dados inesperados ou falhas de rede.
+
+---
+
+## 💻 Tecnologias Utilizadas
+
+- **Linguagem**: Python 3.9+
+- **Web Scraping**: Selenium, BeautifulSoup4
+- **Manipulação de Dados**: Pandas
+- **Banco de Dados**: Supabase (PostgreSQL)
+- **Notificações**: API do Telegram
+- **Dependências**: `python-dotenv`, `requests`
 
 ---
 
 ## 🚀 Requisitos
 
-- Python 3.8+
-- Google Chrome (para Selenium)
-- Token do bot e ID do canal do Telegram
+- **Python 3.9** ou superior
+- **Google Chrome** instalado
+- Conta no **Telegram** e credenciais de um Bot (token e chat ID)
+- Conta gratuita no **[Supabase](https://supabase.com/)**
 
 ---
 
-## 🛠️ Instalação
+## 🛠️ Guia de Instalação e Configuração
 
-1. **Clone o repositório:**
-   ```sh
-   git clone https://github.com/lino167/Dropping-Odds-Monitor.git
-   cd dropping_odds
-   ```
+### 1. Clonar o Repositório
 
-2. **Crie e ative um ambiente virtual (opcional, mas recomendado):**
-   ```sh
-   python -m venv venv
-   venv\Scripts\activate
-   ```
-
-3. **Instale as dependências:**
-   ```sh
-   pip install -r requirements.txt
-   ```
-
-4. **Configure o arquivo `.env`:**
-   Crie um arquivo `.env` na raiz do projeto com:
-   ```
-   TELEGRAM_BOT_TOKEN=seu_token_aqui
-   TELEGRAM_CHAT_ID=seu_canal_id_aqui
-   ```
-
----
-
-## ▶️ Como Funciona
-
-O monitor realiza a varredura das odds em tempo real e só envia alertas quando TODOS os critérios abaixo são atendidos:
-
-- **Favorito identificado**: O time com menor odd inicial (home ou away) e odds válidas (>1.01).
-- **Drop relevante na linha de gols**: O drop da linha de gols (coluna `drop`) deve ser maior ou igual a 0.40.
-- **Sem cartões vermelhos e sem pênaltis**: Ambos os times sem cartões vermelhos e sem pênaltis (0-0).
-- **Favorito não está vencendo**: O favorito está empatando ou perdendo no momento do alerta.
-- **Variação relevante na odd do favorito**: Queda ou subida de pelo menos 30% em relação à odd inicial.
-- **Minuto do jogo**: O alerta só é enviado antes do minuto 80.
-
-Quando todos esses critérios são satisfeitos, o sistema envia um alerta para o Telegram no seguinte formato:
-
-```
-🤖 Alerta automático para o jogo [Time da Casa] x [Time Visitante] ([Liga]):
-📉 Drop significativo na linha de gols: [valor do drop]
-📊 Linha de gols inicial: [handicap inicial] (Odd: [odd inicial])
-⚡ Linha de gols atual: [handicap atual] (Odd: [odd atual])
-⭐ O favorito é o [nome do favorito] com [queda/subida] de [X]% ([odd inicial] → [odd atual])
-🔢 Placar atual: [placar]
-⏱️ Minuto: [minuto]
-Para mais detalhes, acesse: [link]
-⚠️ Lembre-se: este é um alerta automatizado, não é recomendação de aposta.
+```bash
+git clone https://github.com/lino167/Dropping-Odds-Monitor.git
+cd seu-repositorio
 ```
 
+### 2. Criar um Ambiente Virtual (Recomendado)
+
+```bash
+python -m venv venv
+# Ativar o ambiente
+# No Windows:
+venv\Scripts\activate
+# No macOS/Linux:
+source venv/bin/activate
+```
+
+### 3. Instalar as Dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurar o Supabase
+
+- **Crie um Projeto:** Faça login no Supabase e crie um novo projeto.
+- **Crie a Tabela de Alertas:**
+  - No menu lateral, vá para Table Editor.
+  - Clique em "Create a new table".
+  - Nomeie a tabela como `alertas_enviados`.
+  - Desmarque "Enable Row Level Security (RLS)" para facilitar os testes.
+  - Adicione as seguintes colunas:
+
+| Nome da Coluna           | Tipo (Type) | Observações                                 |
+|--------------------------|-------------|---------------------------------------------|
+| id                       | int8        | (Padrão - Deixe como está)                  |
+| created_at               | timestamptz | (Padrão - Deixe como está)                  |
+| game_id                  | text        | **Chave Primária (Primary Key)**            |
+| liga                     | text        |                                             |
+| times                    | text        |                                             |
+| favorito                 | text        |                                             |
+| odd_inicial_favorito     | float8      | Número com casas decimais                   |
+| odd_atual_favorito       | float8      | Número com casas decimais                   |
+| queda_odd_favorito       | float8      | Número com casas decimais                   |
+| linha_gols_inicial       | text        |                                             |
+| odd_linha_gols_inicial   | float8      | Número com casas decimais                   |
+| linha_gols_atual         | text        |                                             |
+| odd_linha_gols_atual     | float8      | Número com casas decimais                   |
+| drop_total               | float8      | Número com casas decimais                   |
+| placar                   | text        |                                             |
+| tempo_jogo               | int8        | Número inteiro (ex: 39)                     |
+| url                      | text        |                                             |
+| mensagem_html            | text        |                                             |
+
+- **Obtenha suas Chaves de API:**
+  - No menu lateral, vá em Project Settings > API.
+  - Copie a Project URL e a chave anon public.
+
+### 5. Configurar o Arquivo `.env`
+
+Crie um arquivo `.env` na raiz do projeto com o seguinte conteúdo:
+
+```env
+# Chaves do seu bot do Telegram (obtenha com o @BotFather)
+TELEGRAM_BOT_TOKEN="SEU_TOKEN_AQUI"
+TELEGRAM_CHAT_ID="SEU_CHAT_ID_AQUI"
+
+# Chaves do seu projeto Supabase
+SUPABASE_URL="SUA_URL_DO_PROJETO_SUPABASE_AQUI"
+SUPABASE_KEY="SUA_CHAVE_ANON_PUBLIC_AQUI"
+```
+
 ---
 
-## ▶️ Como Usar
+## ▶️ Como Executar
 
-1. **Execute o monitoramento:**
-   ```sh
-   python monitor.py
-   ```
+Com tudo configurado, rode o script principal:
 
-2. **Receba alertas no Telegram:**  
-   Os alertas de variação de odds serão enviados automaticamente para o canal configurado.
+```bash
+python monitor.py
+```
 
-3. **Consulte os relatórios:**  
-   Os dados coletados e processados serão salvos em arquivos Excel na raiz do projeto.
+O bot começará a monitorar os jogos, e você verá os logs de atividade no terminal. Quando um alerta for gerado, ele será enviado para o seu Telegram e registrado no Supabase.
 
 ---
 
 ## 📁 Estrutura do Projeto
 
 ```
-dropping_odds/
-│
-├── config.py           # Carrega configurações do .env
-├── data_extractor.py   # Extrai e processa odds dos sites
-├── excel_utils.py      # Manipula exportação para Excel
-├── monitor.py          # Script principal de monitoramento
-├── alert_manager.py    # Lógica de geração e envio de alertas
-├── telegram_utils.py   # Envio de mensagens para o Telegram
-├── requirements.txt    # Dependências do projeto
-├── .env.example        # Exemplo de configuração
-└── README.md           # Este arquivo
+.
+├── venv/                # Ambiente virtual do Python
+├── .env                 # Suas chaves e segredos (NÃO ENVIE PARA O GITHUB)
+├── alert_manager.py     # Lógica de geração e envio de alertas
+├── config.py            # Configurações e variáveis de ambiente
+├── data_extractor.py    # Extração de dados de odds
+├── excel_utils.py       # Funções para exportação para Excel
+├── monitor.py           # Script principal de monitoramento
+├── requirements.txt     # Dependências do projeto
+└── README.md            # Este arquivo
 ```
 
 ---
