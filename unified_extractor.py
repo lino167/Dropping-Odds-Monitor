@@ -17,7 +17,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from bs4 import BeautifulSoup
 
 class UnifiedExtractor:
-    """Extrator unificado para dados de apostas 1x2, totals e handicap."""
+    """Extrator unificado para dados de apostas 1x2, totals, handicap e totals HT."""
     
     def __init__(self):
         """Inicializa o extrator unificado."""
@@ -266,6 +266,82 @@ class UnifiedExtractor:
             print(f"❌ Erro ao extrair dados de handicap: {str(e)}")
             return None
             
+    def extract_total_ht_data(self, game_id):
+        """Extrai dados de totals do primeiro tempo.
+        
+        Args:
+            game_id (str): ID do jogo
+            
+        Returns:
+            dict: Dados extraídos ou None se houver erro
+        """
+        url = f"https://dropping-odds.com/event.php?id={game_id}&t=total_ht"
+        
+        try:
+            print(f"🎯 Extraindo dados de totals HT: {url}")
+            self.driver.get(url)
+            
+            # Aguarda a tabela carregar
+            self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+            time.sleep(2)
+            
+            # Obtém o HTML da página
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            
+            # Encontra a tabela principal
+            table = soup.find('table')
+            if not table:
+                print("❌ Tabela de totals HT não encontrada")
+                return None
+                
+            # Extrai cabeçalhos
+            headers = []
+            header_row = table.find('tr')
+            if header_row:
+                for th in header_row.find_all(['th', 'td']):
+                    headers.append(th.get_text(strip=True))
+            
+            # Extrai dados das linhas
+            rows_data = []
+            rows = table.find_all('tr')[1:]  # Pula o cabeçalho
+            
+            for i, row in enumerate(rows):
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 6:  # Verifica se tem dados suficientes
+                    row_data = {
+                        'row_index': i + 1,
+                        'date_time': cells[0].get_text(strip=True) if len(cells) > 0 else '',
+                        'time': cells[1].get_text(strip=True) if len(cells) > 1 else '',
+                        'score': cells[2].get_text(strip=True) if len(cells) > 2 else '',
+                        'over_odds': cells[3].get_text(strip=True) if len(cells) > 3 else '',
+                        'handicap': cells[4].get_text(strip=True) if len(cells) > 4 else '',
+                        'under_odds': cells[5].get_text(strip=True) if len(cells) > 5 else '',
+                        'over_percentage': cells[6].get_text(strip=True) if len(cells) > 6 else '',
+                        'drop_percentage': cells[7].get_text(strip=True) if len(cells) > 7 else '',
+                        'under_percentage': cells[8].get_text(strip=True) if len(cells) > 8 else '',
+                        'bookmaker': cells[9].get_text(strip=True) if len(cells) > 9 else '',
+                        'extracted_at': datetime.now().isoformat()
+                    }
+                    
+                    # Filtra linhas com dados válidos
+                    if (row_data['over_odds'] and row_data['under_odds'] and 
+                        row_data['over_odds'] not in ['', '-'] and row_data['under_odds'] not in ['', '-']):
+                        rows_data.append(row_data)
+            
+            result = {
+                'bet_type': 'total_ht',
+                'headers': headers,
+                'total_rows': len(rows_data),
+                'data': rows_data
+            }
+            
+            print(f"✅ Extraídos {len(rows_data)} registros de totals HT")
+            return result
+            
+        except Exception as e:
+            print(f"❌ Erro ao extrair dados de totals HT: {str(e)}")
+            return None
+            
     def extract_all_data(self, game_id):
         """Extrai todos os tipos de dados para um jogo.
         
@@ -291,6 +367,9 @@ class UnifiedExtractor:
         # Extrai dados de handicap
         data_handicap = self.extract_handicap_data(game_id)
         
+        # Extrai dados de totals HT
+        data_total_ht = self.extract_total_ht_data(game_id)
+        
         # Compila resultado final
         result = {
             'game_id': game_id,
@@ -299,16 +378,19 @@ class UnifiedExtractor:
             'bet_types': {
                 '1x2': data_1x2,
                 'total': data_total,
-                'handicap': data_handicap
+                'handicap': data_handicap,
+                'total_ht': data_total_ht
             },
             'summary': {
                 'total_1x2_records': data_1x2['total_rows'] if data_1x2 else 0,
                 'total_total_records': data_total['total_rows'] if data_total else 0,
                 'total_handicap_records': data_handicap['total_rows'] if data_handicap else 0,
-                'total_records': (data_1x2['total_rows'] if data_1x2 else 0) + (data_total['total_rows'] if data_total else 0) + (data_handicap['total_rows'] if data_handicap else 0),
+                'total_total_ht_records': data_total_ht['total_rows'] if data_total_ht else 0,
+                'total_records': (data_1x2['total_rows'] if data_1x2 else 0) + (data_total['total_rows'] if data_total else 0) + (data_handicap['total_rows'] if data_handicap else 0) + (data_total_ht['total_rows'] if data_total_ht else 0),
                 'success_1x2': data_1x2 is not None,
                 'success_total': data_total is not None,
-                'success_handicap': data_handicap is not None
+                'success_handicap': data_handicap is not None,
+                'success_total_ht': data_total_ht is not None
             }
         }
         
@@ -318,6 +400,7 @@ class UnifiedExtractor:
         print(f"   📊 Registros 1x2: {result['summary']['total_1x2_records']}")
         print(f"   📈 Registros totais: {result['summary']['total_total_records']}")
         print(f"   🎲 Registros handicap: {result['summary']['total_handicap_records']}")
+        print(f"   ⏰ Registros totals HT: {result['summary']['total_total_ht_records']}")
         print(f"   📋 Total geral: {result['summary']['total_records']}")
         
         return result
@@ -364,6 +447,8 @@ def main():
                             print(f"   📝 Exemplo: {first_record['date_time']} - Over: {first_record['over_odds']} ({first_record['handicap']}) Under: {first_record['under_odds']}")
                         elif bet_type == 'handicap':
                             print(f"   📝 Exemplo: {first_record['date_time']} - Casa: {first_record['home_odds']} ({first_record['handicap']}) Fora: {first_record['away_odds']}")
+                        elif bet_type == 'total_ht':
+                            print(f"   📝 Exemplo: {first_record['date_time']} - Over HT: {first_record['over_odds']} ({first_record['handicap']}) Under HT: {first_record['under_odds']}")
         else:
             print("❌ Falha na extração de dados")
             
