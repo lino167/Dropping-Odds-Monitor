@@ -100,6 +100,11 @@ class EnhancedDropDetector:
                 "min_drop_percentage": 6.0,
                 "significant_drop_percentage": 15.0,
                 "major_drop_percentage": 30.0
+            },
+            "total_ht": {
+                "min_drop_percentage": 3.0,
+                "significant_drop_percentage": 8.0,
+                "major_drop_percentage": 15.0
             }
         }
         
@@ -113,12 +118,13 @@ class EnhancedDropDetector:
             "major-drop": DropConfidence.VERY_HIGH
         }
         
-        # Columns to monitor for drops
+        # Columns to monitor for drops based on table type
         self.monitored_columns = {
-            "1x2": ["home_odd", "draw_odd", "away_odd"],
-            "total": ["over", "under", "handicap"],
-            "handicap": ["home_handicap", "away_handicap"],
-            "1x2_ht": ["home_ht", "draw_ht", "away_ht"]
+            "1x2": ["home_percentage", "away_percentage"],  # Para 1x2: drops estão nas colunas home% e away%
+            "total": ["drop"],  # Para total: drops estão na coluna drop
+            "handicap": ["sharpness"],  # Para handicap: drops estão na coluna sharpness
+            "1x2_ht": ["home_percentage", "away_percentage"],  # Para 1x2_ht: drops estão nas colunas home% e away%
+            "total_ht": ["drop"]  # Para total_ht: drops estão na coluna drop
         }
         
         # Statistics
@@ -136,44 +142,30 @@ class EnhancedDropDetector:
             "last_detection": None
         }
     
-    def detect_drops(self, soup: BeautifulSoup, table_type: str, 
-                    previous_data: Optional[Dict] = None) -> List[DropInfo]:
-        """Detect drops using hybrid approach
+    def detect_drops(self, table_data: Dict, table_type: str) -> List[DropInfo]:
+        """
+        Detecta drops nas odds baseado nos thresholds configurados.
         
         Args:
-            soup: BeautifulSoup object of the page
-            table_type: Type of table (1x2, total, handicap, etc.)
-            previous_data: Previous extraction data for comparison
+            table_data: Dados da tabela extraídos
+            table_type: Tipo da tabela (1x2, total, handicap, etc.)
             
         Returns:
-            List of detected drops
+            Lista de DropInfo com os drops detectados
         """
         drops = []
         
-        try:
-            self.logger.debug(f"Starting drop detection for table type: {table_type}")
+        if not table_data or 'data' not in table_data:
+            return drops
             
-            # Method 1: CSS-based detection
-            css_drops = self._detect_drops_by_css(soup, table_type)
-            drops.extend(css_drops)
+        data_rows = table_data['data']
+        if not data_rows:
+            return drops
             
-            # Method 2: Column-based detection (primary method)
-            if previous_data:
-                column_drops = self._detect_drops_by_columns(soup, table_type, previous_data)
-                drops.extend(column_drops)
-            
-            # Method 3: Hybrid validation
-            validated_drops = self._validate_and_merge_drops(drops)
-            
-            # Update statistics
-            self._update_stats(validated_drops)
-            
-            self.logger.info(f"Detected {len(validated_drops)} drops in {table_type} table")
-            return validated_drops
-            
-        except Exception as e:
-            self.logger.error(f"Drop detection failed for {table_type}: {e}")
-            raise AnalysisError(f"Drop detection failed: {e}", "ANALYSIS_002")
+        # Usar detecção específica por colunas baseada no tipo de tabela
+        drops.extend(self._detect_drops_by_specific_columns_test(data_rows, table_type))
+        
+        return drops
     
     def _detect_drops_by_css(self, soup: BeautifulSoup, table_type: str) -> List[DropInfo]:
         """Detect drops using CSS classes
@@ -577,6 +569,249 @@ class EnhancedDropDetector:
         
         self.logger.info("Detection statistics reset")
     
+    def _detect_drops_by_specific_columns(self, soup: BeautifulSoup, table_type: str) -> List[DropInfo]:
+        """Detect drops using specific columns for each table type
+        
+        Args:
+            soup: BeautifulSoup object
+            table_type: Table type
+            
+        Returns:
+            List of detected drops
+        """
+        drops = []
+        
+        try:
+            # Get current data
+            current_data = self._extract_table_data(soup, table_type)
+            
+            # Check specific columns based on table type
+            if table_type == "1x2":
+                drops.extend(self._detect_1x2_drops(current_data))
+            elif table_type == "total":
+                drops.extend(self._detect_total_drops(current_data))
+            elif table_type == "handicap":
+                drops.extend(self._detect_handicap_drops(current_data))
+            elif table_type == "1x2_ht":
+                drops.extend(self._detect_1x2_ht_drops(current_data))
+            elif table_type == "total_ht":
+                drops.extend(self._detect_total_ht_drops(current_data))
+            
+            self.logger.debug(f"Specific column detection found {len(drops)} drops")
+            return drops
+            
+        except Exception as e:
+            self.logger.warning(f"Specific column detection failed: {e}")
+            return []
+    
+    def _detect_1x2_drops(self, current_data: Dict) -> List[DropInfo]:
+        """Detecta drops em tabelas 1x2 usando as colunas home% e away%"""
+        drops = []
+        
+        for row_index, row_data in current_data.items():
+            # Para 1x2: usa as colunas home% e away% diretamente
+            home_percentage = self._parse_percentage(row_data.get('home_percentage', '0%'))
+            away_percentage = self._parse_percentage(row_data.get('away_percentage', '0%'))
+            
+            # Verifica se os percentuais excedem os thresholds
+            if abs(home_percentage) >= self.thresholds['1x2']['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="1x2",
+                    row_index=row_index,
+                    column_name="home_percentage",
+                    drop_type=DropType.PERCENTAGE_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(home_percentage)),
+                    new_value=f"{home_percentage}%",
+                    percentage_change=home_percentage,
+                    detection_method="specific_column_1x2"
+                ))
+                
+            if abs(away_percentage) >= self.thresholds['1x2']['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="1x2",
+                    row_index=row_index,
+                    column_name="away_percentage",
+                    drop_type=DropType.PERCENTAGE_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(away_percentage)),
+                    new_value=f"{away_percentage}%",
+                    percentage_change=away_percentage,
+                    detection_method="specific_column_1x2"
+                ))
+                
+        return drops
+    
+    def _detect_total_drops(self, current_data: Dict) -> List[DropInfo]:
+        """Detecta drops em tabelas total usando a coluna drop"""
+        drops = []
+        
+        for row_index, row_data in current_data.items():
+            # Para total: usa a coluna drop diretamente
+            drop_value = float(row_data.get('drop', 0) or 0)
+            
+            # Verifica se o drop excede o threshold
+            if abs(drop_value) >= self.thresholds['total']['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="total",
+                    row_index=row_index,
+                    column_name="drop",
+                    drop_type=DropType.VOLUME_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(drop_value)),
+                    new_value=str(drop_value),
+                    percentage_change=drop_value,
+                    detection_method="specific_column_total"
+                ))
+                
+        return drops
+    
+    def _detect_handicap_drops(self, current_data: Dict) -> List[DropInfo]:
+        """Detecta drops em tabelas handicap usando a coluna sharpness"""
+        drops = []
+        
+        for row_index, row_data in current_data.items():
+            # Para handicap: usa a coluna sharpness diretamente
+            sharpness_value = float(row_data.get('sharpness', 0) or 0)
+            
+            # Verifica se o sharpness excede o threshold
+            if abs(sharpness_value) >= self.thresholds['handicap']['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="handicap",
+                    row_index=row_index,
+                    column_name="sharpness",
+                    drop_type=DropType.ODDS_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(sharpness_value)),
+                    new_value=str(sharpness_value),
+                    percentage_change=sharpness_value,
+                    detection_method="specific_column_handicap"
+                ))
+                
+        return drops
+    
+    def _detect_1x2_ht_drops(self, current_data: Dict) -> List[DropInfo]:
+        """Detecta drops em tabelas 1x2 half-time usando as colunas home% e away%"""
+        drops = []
+        
+        for row_index, row_data in current_data.items():
+            # Para 1x2_ht: usa as colunas home% e away% diretamente
+            home_percentage = self._parse_percentage(row_data.get('home_percentage', '0%'))
+            away_percentage = self._parse_percentage(row_data.get('away_percentage', '0%'))
+            
+            # Verifica se os percentuais excedem os thresholds
+            if abs(home_percentage) >= self.thresholds['1x2_ht']['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="1x2_ht",
+                    row_index=row_index,
+                    column_name="home_percentage",
+                    drop_type=DropType.PERCENTAGE_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(home_percentage)),
+                    new_value=f"{home_percentage}%",
+                    percentage_change=home_percentage,
+                    detection_method="specific_column_1x2_ht"
+                ))
+                
+            if abs(away_percentage) >= self.thresholds['1x2_ht']['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="1x2_ht",
+                    row_index=row_index,
+                    column_name="away_percentage",
+                    drop_type=DropType.PERCENTAGE_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(away_percentage)),
+                    new_value=f"{away_percentage}%",
+                    percentage_change=away_percentage,
+                    detection_method="specific_column_1x2_ht"
+                ))
+                
+        return drops
+    
+    def _detect_total_ht_drops(self, current_data: Dict) -> List[DropInfo]:
+        """Detecta drops em tabelas total half-time usando a coluna drop"""
+        drops = []
+        
+        for row_index, row_data in current_data.items():
+            # Para total_ht: usa a coluna drop diretamente
+            drop_value = float(row_data.get('drop', 0) or 0)
+            
+            # Verifica se o drop excede o threshold
+            if abs(drop_value) >= self.thresholds.get('total_ht', self.thresholds['total'])['min_drop_percentage']:
+                drops.append(DropInfo(
+                    table_type="total_ht",
+                    row_index=row_index,
+                    column_name="drop",
+                    drop_type=DropType.VOLUME_DROP,
+                    confidence=self._get_confidence_by_percentage(abs(drop_value)),
+                    new_value=str(drop_value),
+                    percentage_change=drop_value,
+                    detection_method="specific_column_total_ht"
+                ))
+                
+        return drops
+    
+    def _parse_percentage(self, value: str) -> float:
+        """Parse percentage string to float
+        
+        Args:
+            value: Percentage string (e.g., '5.2%', '-3.1%')
+            
+        Returns:
+            Float value
+        """
+        try:
+            if isinstance(value, str):
+                # Remove % sign and convert to float
+                cleaned = value.replace('%', '').strip()
+                return float(cleaned) if cleaned else 0.0
+            return float(value) if value else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+    
+    def _get_confidence_by_percentage(self, percentage: float) -> DropConfidence:
+        """Get confidence level based on percentage value
+        
+        Args:
+            percentage: Absolute percentage value
+            
+        Returns:
+            DropConfidence level
+        """
+        if percentage >= 20.0:
+            return DropConfidence.VERY_HIGH
+        elif percentage >= 10.0:
+            return DropConfidence.HIGH
+        elif percentage >= 5.0:
+            return DropConfidence.MEDIUM
+        else:
+            return DropConfidence.LOW
+    
+    def _detect_drops_by_specific_columns_test(self, test_data: Dict, table_type: str) -> List[DropInfo]:
+         """Test method for specific column detection
+         
+         Args:
+             test_data: Test data dictionary
+             table_type: Table type
+             
+         Returns:
+             List of detected drops
+         """
+         drops = []
+         
+         try:
+             # Check specific columns based on table type
+             if table_type == "1x2":
+                 drops.extend(self._detect_1x2_drops(test_data))
+             elif table_type == "total":
+                 drops.extend(self._detect_total_drops(test_data))
+             elif table_type == "handicap":
+                 drops.extend(self._detect_handicap_drops(test_data))
+             elif table_type == "1x2_ht":
+                 drops.extend(self._detect_1x2_ht_drops(test_data))
+             elif table_type == "total_ht":
+                 drops.extend(self._detect_total_ht_drops(test_data))
+             
+             return drops
+             
+         except Exception as e:
+             self.logger.warning(f"Test detection failed: {e}")
+             return []
+     
     def configure_thresholds(self, table_type: str, thresholds: Dict[str, float]) -> None:
         """Configure detection thresholds for a table type
         

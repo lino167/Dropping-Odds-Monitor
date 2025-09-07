@@ -35,6 +35,47 @@ class AlertThresholds:
     # Configurações temporais
     time_window_minutes: int = 60
     min_data_points: int = 2
+    
+    # Thresholds para detecção de drops por tipo de tabela
+    # Baseado nas colunas específicas onde os drops aparecem em cada tabela
+    drop_thresholds: dict = None
+    
+    def __post_init__(self):
+        if self.drop_thresholds is None:
+            self.drop_thresholds = {
+                "1x2": {
+                    "home": 5.0,  # 5% nas colunas home% e away%
+                    "away": 5.0,
+                    "min_drop_percentage": 3.0,
+                    "significant_drop_percentage": 8.0,
+                    "major_drop_percentage": 15.0
+                },
+                "total": {
+                    "drop": 0.05,  # 0.05 na coluna drop
+                    "min_drop_percentage": 0.03,
+                    "significant_drop_percentage": 0.10,
+                    "major_drop_percentage": 0.20
+                },
+                "handicap": {
+                    "sharpness": 0.25,  # 0.25 na coluna sharpness
+                    "min_drop_percentage": 0.15,
+                    "significant_drop_percentage": 0.50,
+                    "major_drop_percentage": 1.0
+                },
+                "total_ht": {
+                    "drop": 0.05,  # 0.05 na coluna drop
+                    "min_drop_percentage": 0.03,
+                    "significant_drop_percentage": 0.10,
+                    "major_drop_percentage": 0.20
+                },
+                "1x2_ht": {
+                    "home": 5.0,  # 5% nas colunas home% e away%
+                    "away": 5.0,
+                    "min_drop_percentage": 3.0,
+                    "significant_drop_percentage": 8.0,
+                    "major_drop_percentage": 15.0
+                }
+            }
 
 @dataclass
 class MonitoringProfile:
