@@ -1,158 +1,172 @@
-# 🚦 Dropping Odds Monitor
+# 🚦 Dropping Odds Monitor v2.0
 
-Bem-vindo ao **Dropping Odds Monitor**!  
-Uma solução automatizada para monitorar odds em sites de apostas esportivas, identificar quedas e variações relevantes e enviar alertas em tempo real para o Telegram.
+Um sistema modular em Python para monitoramento e análise de odds em tempo real de sites de apostas esportivas. Esta versão 2.0 apresenta uma arquitetura completamente redesenhada com foco em modularidade, escalabilidade e facilidade de manutenção.
 
----
+## ✨ Principais Melhorias da v2.0
 
-## ✨ Funcionalidades
+### 🏗️ **Arquitetura Modular**
+- Sistema baseado em módulos independentes e reutilizáveis
+- Separação clara de responsabilidades
+- Facilita manutenção e expansão do sistema
 
-- 🔎 **Web Scraping de Odds**: Coleta automática de odds em sites de apostas.
-- 🎯 **Detecção Inteligente de Drops**: Identifica automaticamente partidas com drops usando classes CSS (red1, red2, red3).
-- 📉 **Detecção de Quedas e Subidas**: Identifica quedas e subidas significativas nas cotações do favorito.
-- 🏆 **Análise Inteligente**: Considera apenas cenários relevantes (sem cartões vermelhos, sem pênaltis, favorito empatando ou perdendo, drop relevante na linha de gols).
-- ⚡ **Filtragem Otimizada**: Processa apenas partidas que contêm drops detectados, aumentando a eficiência.
-- 📲 **Alertas no Telegram**: Notificações automáticas e formatadas como prognóstico, enviadas para seu canal.
-- 📊 **Exportação para Excel**: Salva os dados monitorados e os alertas em arquivos `.xlsx`.
-- ⚙️ **Configuração via `.env`**: Ajuste rápido de parâmetros sensíveis.
+### 🎯 **Extração Aprimorada**
+- Captura completa de dados dos jogos ao vivo
+- Extração do Game ID único para cada partida
+- Taxa de sucesso de 100% na captura de dados
+- Suporte a múltiplas ligas e países
 
----
+### 📊 **Dados Estruturados**
+- Informações completas: liga, times, placar, tempo, país, URL
+- Identificação única de cada jogo
+- Timestamp de extração
+- Estrutura de dados padronizada
 
-## 🚀 Requisitos
+## 🚀 Funcionalidades
 
-- Python 3.8+
-- Google Chrome (para Selenium)
-- Token do bot e ID do canal do Telegram
+- **🔎 Scraping em Tempo Real**: Coleta dados de jogos ao vivo usando Selenium
+- **🆔 Identificação Única**: Captura Game ID para rastreamento preciso
+- **📈 Dados Estruturados**: Informações organizadas e padronizadas
+- **🏗️ Arquitetura Modular**: Sistema extensível e maintível
+- **⚡ Alta Performance**: Otimizado para processamento eficiente
 
----
+## 💻 Tecnologias Utilizadas
+
+- **Linguagem**: Python 3.9+
+- **Web Scraping**: Selenium, BeautifulSoup4
+- **Manipulação de Dados**: Pandas, NumPy
+- **Arquitetura**: Padrão modular com event bus
+- **Dependências**: Listadas em `requirements.txt`
 
 ## 🛠️ Instalação
 
-1. **Clone o repositório:**
-   ```sh
-   git clone https://github.com/lino167/Dropping-Odds-Monitor.git
-   cd dropping_odds
-   ```
-
-2. **Crie e ative um ambiente virtual (opcional, mas recomendado):**
-   ```sh
-   python -m venv venv
-   venv\Scripts\activate
-   ```
-
-3. **Instale as dependências:**
-   ```sh
-   pip install -r requirements.txt
-   ```
-
-4. **Configure o arquivo `.env`:**
-   Crie um arquivo `.env` na raiz do projeto com:
-   ```
-   TELEGRAM_BOT_TOKEN=seu_token_aqui
-   TELEGRAM_CHAT_ID=seu_canal_id_aqui
-   ```
-
----
-
-## ▶️ Como Funciona
-
-O monitor realiza a varredura das odds em tempo real e só envia alertas quando TODOS os critérios abaixo são atendidos:
-
-- **Favorito identificado**: O time com menor odd inicial (home ou away) e odds válidas (>1.01).
-- **Drop relevante na linha de gols**: O drop da linha de gols (coluna `drop`) deve ser maior ou igual a 0.40.
-- **Sem cartões vermelhos e sem pênaltis**: Ambos os times sem cartões vermelhos e sem pênaltis (0-0).
-- **Favorito não está vencendo**: O favorito está empatando ou perdendo no momento do alerta.
-- **Variação relevante na odd do favorito**: Queda ou subida de pelo menos 30% em relação à odd inicial.
-- **Minuto do jogo**: O alerta só é enviado antes do minuto 80.
-
-Quando todos esses critérios são satisfeitos, o sistema envia um alerta para o Telegram no seguinte formato:
-
-```
-🤖 Alerta automático para o jogo [Time da Casa] x [Time Visitante] ([Liga]):
-📉 Drop significativo na linha de gols: [valor do drop]
-📊 Linha de gols inicial: [handicap inicial] (Odd: [odd inicial])
-⚡ Linha de gols atual: [handicap atual] (Odd: [odd atual])
-⭐ O favorito é o [nome do favorito] com [queda/subida] de [X]% ([odd inicial] → [odd atual])
-🔢 Placar atual: [placar]
-⏱️ Minuto: [minuto]
-Para mais detalhes, acesse: [link]
-⚠️ Lembre-se: este é um alerta automatizado, não é recomendação de aposta.
+### 1. Clonar o Repositório
+```bash
+git clone https://github.com/lino167/Dropping-Odds-Monitor.git
+cd Dropping-Odds-Monitor
 ```
 
----
+### 2. Criar Ambiente Virtual
+```bash
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS/Linux
+source venv/bin/activate
+```
+
+### 3. Instalar Dependências
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurar Ambiente
+Crie um arquivo `.env` na raiz do projeto:
+```env
+# Configurações do sistema
+DEBUG=True
+HEADLESS=True
+```
 
 ## ▶️ Como Usar
 
-1. **Execute o monitoramento:**
-   ```sh
-   python monitor.py
-   ```
+### Extração Básica de Dados
+```bash
+python main_extractor.py
+```
 
-2. **Receba alertas no Telegram:**  
-   Os alertas de variação de odds serão enviados automaticamente para o canal configurado.
-
-3. **Consulte os relatórios:**  
-   Os dados coletados e processados serão salvos em arquivos Excel na raiz do projeto.
-
----
+### Sistema Completo v2.0
+```bash
+python v2/test_v2_system.py
+```
 
 ## 📁 Estrutura do Projeto
 
 ```
-dropping_odds/
-│
-├── config.py                    # Carrega configurações do .env
-├── data_extractor.py           # Extrai e processa odds dos sites
-├── drop_detector.py            # 🆕 Detecta drops usando classes CSS red1/red2/red3
-├── excel_utils.py              # Manipula exportação para Excel
-├── monitor.py                  # Script principal de monitoramento
-├── alert_manager.py            # Lógica de geração e envio de alertas
-├── telegram_utils.py           # Envio de mensagens para o Telegram
-├── test_drop_detection.py      # 🆕 Script de teste para detecção de drops
-├── requirements.txt            # Dependências do projeto
-├── .env.example                # Exemplo de configuração
-└── README.md                   # Este arquivo
+.
+├── v2/                     # Sistema v2.0
+│   ├── core/               # Módulos base
+│   │   ├── base_module.py  # Classe base para módulos
+│   │   ├── event_bus.py    # Sistema de eventos
+│   │   ├── exceptions.py   # Exceções customizadas
+│   │   └── utils.py        # Utilitários gerais
+│   ├── modules/            # Módulos funcionais
+│   │   └── scraper/        # Módulo de extração
+│   │       ├── live_extractor.py  # Extrator de jogos ao vivo
+│   │       └── game_monitor.py    # Monitor de jogos
+│   └── test_v2_system.py   # Teste do sistema v2.0
+├── main_extractor.py       # Script principal de extração
+├── requirements.txt        # Dependências
+├── .env                    # Variáveis de ambiente
+├── .gitignore             # Arquivos ignorados pelo Git
+└── README.md              # Este arquivo
 ```
 
-## 🎯 Nova Funcionalidade: Detecção de Drops
+## 🎯 Exemplo de Saída
 
-O sistema agora identifica automaticamente partidas que contêm drops significativos através das classes CSS:
+```
+🏆 EXTRATOR DE JOGOS AO VIVO - DROPPING ODDS
+============================================================
+📅 Data/Hora: 07/01/2025 15:30:45
 
-- **red1**: Drops de alta severidade
-- **red2**: Drops de média severidade  
-- **red3**: Drops de baixa severidade
+🔄 Iniciando extração...
+✅ 40 jogos extraídos com sucesso!
 
-### Como Funciona:
+📊 DADOS EXTRAÍDOS:
+============================================================
 
-1. **Verificação Rápida**: O sistema verifica rapidamente se uma partida contém drops antes de processar todos os dados
-2. **Filtragem Inteligente**: Apenas partidas com drops detectados são processadas completamente
-3. **Otimização de Performance**: Reduz significativamente o tempo de processamento
-4. **Alertas Priorizados**: Partidas com drops recebem prioridade no processamento
+🎮 JOGO 01
+   🏆 Liga: Spain Regional League
+   🏠 Casa: CD Bolanego
+   ⚽ Placar: 0:2
+   🏃 Visitante: CD Quintanar
+   ⏰ Tempo: 73:23
+   🆔 Game ID: 10620717
 
-### Testando a Detecção:
-
-```bash
-python test_drop_detection.py
+📈 ESTATÍSTICAS:
+============================================================
+📊 Total de jogos: 40
+🆔 Jogos com ID: 40
+📊 Taxa de captura de ID: 100.0%
+🏆 Ligas diferentes: 31
+🌍 Países diferentes: 15
 ```
 
-Este script permite testar a funcionalidade de detecção em partidas específicas.
+## 🔧 Configuração Avançada
 
----
+### Variáveis de Ambiente (.env)
+```env
+# Modo de execução
+DEBUG=True
+HEADLESS=True
 
-## 🤝 Contribua
+# Configurações do scraper
+SCRAPER_TIMEOUT=30
+SCRAPER_RETRY_COUNT=3
 
-Contribuições são bem-vindas!  
-Abra uma issue ou envie um pull request.
+# URLs
+BASE_URL=https://dropping-odds.com/index.php?view=live
+```
 
----
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Por favor:
+
+1. Faça um fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
 
 ## 📄 Licença
 
-MIT
-
----
+Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
 
 ## 📬 Contato
 
-Dúvidas ou sugestões?  
-Abra uma issue no repositório ou entre em contato pelo canal do Telegram configurado.
+Para dúvidas ou sugestões, abra uma issue no repositório.
+
+---
+
+**v2.0** - Sistema completamente redesenhado com arquitetura modular e extração aprimorada.
